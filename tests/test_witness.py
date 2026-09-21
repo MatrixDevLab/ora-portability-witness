@@ -1,4 +1,6 @@
 import json
+import contextlib
+import io
 import tempfile
 import unittest
 import zipfile
@@ -7,7 +9,7 @@ from pathlib import Path
 import sys
 
 sys.path.insert(0, str(Path(__file__).parents[1] / "src"))
-from ora_witness import validate  # noqa: E402
+from ora_witness import main, validate  # noqa: E402
 
 
 PNG = b"\x89PNG\r\n\x1a\n" + b"\x00\x00\x00\rIHDR" + bytes.fromhex("00000001000000010802000000") + b"\x00\x00\x00\x00IEND\xaeB\x60\x82"
@@ -75,10 +77,20 @@ class WitnessTests(unittest.TestCase):
     def test_deterministic_report(self):
         with tempfile.TemporaryDirectory() as directory:
             path = Path(directory) / "same.ora"
-            archive(path, VALID_STACK)
+            archive(path, VALID_STACK.replace("src='data/layer.png'", "src='data/layer.png' composite-op='mypaint:spectral'"))
             first = json.dumps(validate(str(path)), sort_keys=True)
             second = json.dumps(validate(str(path)), sort_keys=True)
             self.assertEqual(first, second)
+
+    def test_strict_cli_fails_on_warning(self):
+        with tempfile.TemporaryDirectory() as directory:
+            path = Path(directory) / "warning.ora"
+            archive(path, VALID_STACK.replace("src='data/layer.png'", "src='data/layer.png' composite-op='mypaint:spectral'"))
+            output = io.StringIO()
+            with contextlib.redirect_stdout(output):
+                result = main(["--strict", str(path)])
+            self.assertEqual(result, 1)
+            self.assertEqual(json.loads(output.getvalue())["status"], "warning")
 
     def test_malformed_xml_is_fail_closed(self):
         with tempfile.TemporaryDirectory() as directory:
