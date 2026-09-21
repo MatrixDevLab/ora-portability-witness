@@ -1,0 +1,1 @@
+"""OpenRaster portability witness."""
